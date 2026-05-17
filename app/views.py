@@ -1,10 +1,12 @@
 import base64
 
-from flask import abort, current_app, jsonify, render_template, request
+from flask import abort, current_app, jsonify, redirect, render_template, request, url_for
 from flask_appbuilder import ModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
+from flask_login import current_user, login_required
 from markupsafe import Markup
-from wtforms import FileField
+from wtforms import DateTimeLocalField, FileField
+from wtforms.validators import DataRequired
 
 from app import appbuilder
 from app.crypto import decrypt_id, encrypt_id
@@ -142,6 +144,40 @@ class ReservaModelView(ModelView):
     datamodel = SQLAInterface(Reserva)
 
     related_views = [DetalleReservaModelView]
+    list_columns = [
+        "fecha",
+        "estado",
+        "cantidad_personas",
+        "total_reserva",
+        "usuario",
+    ]
+    show_columns = [
+        "id_reserva",
+        "fecha",
+        "estado",
+        "cantidad_personas",
+        "total_reserva",
+        "usuario",
+        "detalles",
+    ]
+    add_columns = [
+        "fecha",
+        "estado",
+        "cantidad_personas",
+        "total_reserva",
+        "usuario",
+    ]
+    edit_columns = add_columns
+    search_columns = ["estado", "usuario"]
+    order_columns = ["fecha", "estado", "total_reserva"]
+    add_form_extra_fields = {
+        "fecha": DateTimeLocalField(
+            "Fecha y hora",
+            format="%Y-%m-%dT%H:%M",
+            validators=[DataRequired()],
+        ),
+    }
+    edit_form_extra_fields = add_form_extra_fields
 
 
 appbuilder.add_view(
@@ -173,8 +209,11 @@ appbuilder.add_view(
 )
 
 
-@current_app.route("/catalogo/")
-def catalogo():
+def _current_role_names():
+    return {role.name for role in getattr(current_user, "roles", [])}
+
+
+def _catalogo_response():
     categorias = (
         CategoriaPlato.query.join(CategoriaPlato.platos)
         .filter(Plato.disponible.is_(True))
@@ -187,6 +226,41 @@ def catalogo():
             plato.public_id = encrypt_id(plato.id_plato)
 
     return render_template("catalogo.html", categorias=categorias)
+
+
+@current_app.route("/panel/")
+@login_required
+def panel():
+    roles = _current_role_names()
+    if roles.intersection({"Admin", "admin", "cajero"}):
+        return redirect(url_for("ReservaModelView.list"))
+    if "cliente" in roles:
+        return redirect(url_for("cliente"))
+    abort(403)
+
+
+@current_app.route("/cliente/")
+@login_required
+def cliente():
+    if "cliente" not in _current_role_names():
+        abort(403)
+    return _catalogo_response()
+
+
+@current_app.route("/catalogo/")
+def catalogo():
+    return _catalogo_response()
+
+
+@current_app.route("/login-cliente/")
+def login_cliente():
+    return redirect(url_for("AuthDBView.login", next=url_for("cliente")))
+
+
+@current_app.route("/login-personal/")
+def login_personal():
+    return redirect(url_for("AuthDBView.login", next=url_for("panel")))
+
 
 
 @current_app.route("/catalogo/<plato_id>/")
