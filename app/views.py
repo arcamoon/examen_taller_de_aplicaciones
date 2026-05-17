@@ -1,14 +1,25 @@
 import base64
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
-from flask import abort, current_app, jsonify, redirect, render_template, request, url_for
+from flask import (
+    abort,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_appbuilder import ModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_login import current_user, login_required
+from flask_login import current_user, login_user
 from markupsafe import Markup
 from wtforms import DateTimeLocalField, FileField
 from wtforms.validators import DataRequired
 
-from app import appbuilder
+from app import appbuilder, db
 from app.crypto import decrypt_id, encrypt_id
 from app.models import CategoriaPlato, DetalleReserva, Plato, Reserva
 
@@ -213,6 +224,18 @@ def _current_role_names():
     return {role.name for role in getattr(current_user, "roles", [])}
 
 
+def _is_cliente():
+    return current_user.is_authenticated and "cliente" in _current_role_names()
+
+
+def _require_cliente():
+    if not current_user.is_authenticated:
+        return redirect(url_for("login_cliente"))
+    if not _is_cliente():
+        abort(403)
+    return None
+
+
 def _catalogo_response():
     categorias = (
         CategoriaPlato.query.join(CategoriaPlato.platos)
@@ -228,9 +251,36 @@ def _catalogo_response():
     return render_template("catalogo.html", categorias=categorias)
 
 
+@current_app.before_request
+def block_cliente_from_appbuilder_panel():
+    if not _is_cliente():
+        return None
+
+    allowed_prefixes = (
+        "/cliente/",
+        "/catalogo/",
+        "/api/catalogo/",
+        "/static/",
+        "/logout/",
+    )
+    allowed_paths = {
+        "/cliente",
+        "/catalogo",
+        "/login-cliente/",
+        "/login-personal/",
+    }
+
+    if request.path in allowed_paths or request.path.startswith(allowed_prefixes):
+        return None
+
+    return redirect(url_for("cliente"))
+
+
 @current_app.route("/panel/")
-@login_required
 def panel():
+    if not current_user.is_authenticated:
+        return redirect(url_for("AuthDBView.login", next=url_for("panel")))
+
     roles = _current_role_names()
     if roles.intersection({"Admin", "admin", "cajero"}):
         return redirect(url_for("ReservaModelView.list"))
@@ -240,11 +290,83 @@ def panel():
 
 
 @current_app.route("/cliente/")
-@login_required
 def cliente():
-    if "cliente" not in _current_role_names():
-        abort(403)
+    required_response = _require_cliente()
+    if required_response:
+        return required_response
     return _catalogo_response()
+
+
+@current_app.route("/cliente/reservas/")
+def cliente_reservas():
+    required_response = _require_cliente()
+    if required_response:
+        return required_response
+
+    reservas = (
+        Reserva.query.filter_by(id_usuario=current_user.id)
+        .order_by(Reserva.fecha.desc())
+        .all()
+    )
+
+    for reserva in reservas:
+        reserva.public_id = encrypt_id(reserva.id_reserva)
+
+    return render_template("cliente_reservas.html", reservas=reservas)
+
+
+@current_app.post("/cliente/reservas/<plato_id>/crear/")
+def cliente_crear_reserva(plato_id):
+    required_response = _require_cliente()
+    if required_response:
+        return required_response
+
+    try:
+        id_plato = decrypt_id(plato_id)
+        fecha = datetime.strptime(request.form["fecha"], "%Y-%m-%dT%H:%M")
+        cantidad_personas = int(request.form["cantidad_personas"])
+        cantidad = int(request.form["cantidad"])
+    except (KeyError, TypeError, ValueError):
+        flash("Los datos de la reserva no son validos.", "danger")
+        return redirect(url_for("catalogo_detalle", plato_id=plato_id))
+
+    if cantidad_personas <= 0 or cantidad <= 0:
+        flash("La cantidad debe ser mayor a cero.", "danger")
+        return redirect(url_for("catalogo_detalle", plato_id=plato_id))
+
+    plato = Plato.query.filter_by(id_plato=id_plato, disponible=True).first_or_404()
+    if plato.cantidad_disponible < cantidad:
+        flash("No hay suficiente disponibilidad para ese plato.", "warning")
+        return redirect(url_for("catalogo_detalle", plato_id=plato_id))
+
+    try:
+        precio_unitario = Decimal(plato.precio_unitario)
+        subtotal = precio_unitario * Decimal(cantidad)
+    except (InvalidOperation, TypeError):
+        flash("El precio del plato no es valido.", "danger")
+        return redirect(url_for("catalogo_detalle", plato_id=plato_id))
+
+    reserva = Reserva(
+        fecha=fecha,
+        estado="pendiente",
+        cantidad_personas=cantidad_personas,
+        total_reserva=subtotal,
+        id_usuario=current_user.id,
+    )
+    reserva.detalles.append(
+        DetalleReserva(
+            cantidad=cantidad,
+            precio_unitario=precio_unitario,
+            subtotal=subtotal,
+            id_plato=plato.id_plato,
+        )
+    )
+
+    db.session.add(reserva)
+    db.session.commit()
+
+    flash("Reserva creada en estado pendiente.", "success")
+    return redirect(url_for("cliente_reservas"))
 
 
 @current_app.route("/catalogo/")
@@ -252,9 +374,26 @@ def catalogo():
     return _catalogo_response()
 
 
-@current_app.route("/login-cliente/")
+@current_app.route("/login-cliente/", methods=["GET", "POST"])
 def login_cliente():
-    return redirect(url_for("AuthDBView.login", next=url_for("cliente")))
+    if current_user.is_authenticated:
+        if _is_cliente():
+            return redirect(url_for("cliente"))
+        return redirect(url_for("panel"))
+
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+        user = appbuilder.sm.auth_user_db(username, password)
+
+        if not user or "cliente" not in {role.name for role in user.roles}:
+            flash("Credenciales invalidas para cliente.", "danger")
+            return render_template("cliente_login.html")
+
+        login_user(user)
+        return redirect(url_for("cliente"))
+
+    return render_template("cliente_login.html")
 
 
 @current_app.route("/login-personal/")
@@ -271,7 +410,12 @@ def catalogo_detalle(plato_id):
         abort(404)
 
     plato = Plato.query.filter_by(id_plato=id_plato, disponible=True).first_or_404()
-    return render_template("catalogo_detalle.html", plato=plato)
+    return render_template(
+        "catalogo_detalle.html",
+        plato=plato,
+        plato_public_id=plato_id,
+        puede_reservar=_is_cliente(),
+    )
 
 
 @current_app.get("/api/catalogo/categorias/")
