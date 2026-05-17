@@ -43,7 +43,7 @@ class Reserva(db.Model):
     estado = db.Column(
         Enum("pendiente", "aprobado", "completado", "cancelado", name="estado_reserva"),
         nullable=False,
-        default=0,
+        default="pendiente",
     )
     cantidad_personas = db.Column(db.Integer, nullable=False)
     total_reserva = db.Column(db.Numeric(10, 2), nullable=False)
