@@ -17,10 +17,12 @@ def create_app() -> Flask:
         db.init_app(app)
         migrate.init_app(app, db)
 
-        from app import models, views  # noqa: F401
+        from app import models  # noqa: F401
 
         # Inicializamos FAB pasándole la app y la sesión de SQLAlchemy
         appbuilder.init_app(app, db.session)
+
+        from app import views  # noqa: F401
 
         # Aquí abajo continúan tus registros de vistas/APIs...
         # ...
