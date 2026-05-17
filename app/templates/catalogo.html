@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Catalogo de platos</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f7f7f4;
+            --text: #202124;
+            --muted: #676b73;
+            --line: #deded8;
+            --accent: #146c43;
+            --accent-soft: #e5f3eb;
+            --surface: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .page-header {
+            border-bottom: 1px solid var(--line);
+            background: var(--surface);
+        }
+
+        .page-header__inner,
+        .catalog {
+            width: min(1120px, calc(100% - 32px));
+            margin: 0 auto;
+        }
+
+        .page-header__inner {
+            padding: 28px 0 22px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(2rem, 5vw, 4rem);
+            line-height: 1;
+            font-weight: 800;
+            letter-spacing: 0;
+        }
+
+        .subtitle {
+            margin: 10px 0 0;
+            color: var(--muted);
+            font-size: 1rem;
+        }
+
+        .catalog {
+            padding: 28px 0 48px;
+        }
+
+        .category {
+            margin-top: 32px;
+        }
+
+        .category:first-child {
+            margin-top: 0;
+        }
+
+        .category h2 {
+            margin: 0 0 14px;
+            font-size: 1.35rem;
+            letter-spacing: 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 16px;
+        }
+
+        .dish {
+            overflow: hidden;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--surface);
+        }
+
+        .dish__image {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
+            display: block;
+            background: #e8e8e1;
+        }
+
+        .dish__fallback {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            display: grid;
+            place-items: center;
+            background: var(--accent-soft);
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 2rem;
+        }
+
+        .dish__body {
+            padding: 14px;
+        }
+
+        .dish__top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .dish h3 {
+            margin: 0;
+            font-size: 1.05rem;
+            letter-spacing: 0;
+        }
+
+        .price {
+            white-space: nowrap;
+            color: var(--accent);
+            font-weight: 800;
+        }
+
+        .description {
+            min-height: 42px;
+            margin: 10px 0 12px;
+            color: var(--muted);
+            font-size: .93rem;
+            line-height: 1.5;
+        }
+
+        .meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            color: var(--muted);
+            font-size: .88rem;
+        }
+
+        .link {
+            color: var(--accent);
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .empty {
+            border: 1px dashed var(--line);
+            border-radius: 8px;
+            padding: 32px;
+            background: var(--surface);
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+    <header class="page-header">
+        <div class="page-header__inner">
+            <h1>Catalogo</h1>
+            <p class="subtitle">Platos disponibles organizados por categoria.</p>
+        </div>
+    </header>
+
+    <main class="catalog">
+        {% if categorias %}
+            {% for categoria in categorias %}
+                <section class="category">
+                    <h2>{{ categoria.nombre }}</h2>
+                    <div class="grid">
+                        {% for plato in categoria.platos %}
+                            {% if plato.disponible %}
+                                <article class="dish">
+                                    {% if plato.imagen %}
+                                        <img class="dish__image" src="{{ plato.imagen }}" alt="{{ plato.nombre }}">
+                                    {% else %}
+                                        <div class="dish__fallback">{{ plato.nombre[:1] }}</div>
+                                    {% endif %}
+                                    <div class="dish__body">
+                                        <div class="dish__top">
+                                            <h3>{{ plato.nombre }}</h3>
+                                            <span class="price">Bs {{ "%.2f"|format(plato.precio_unitario) }}</span>
+                                        </div>
+                                        <p class="description">{{ plato.descripcion or "Sin descripcion." }}</p>
+                                        <div class="meta">
+                                            <span>{{ plato.cantidad_disponible }} disponibles</span>
+                                            <a class="link" href="{{ url_for('catalogo_detalle', plato_id=plato.public_id) }}">Ver plato</a>
+                                        </div>
+                                    </div>
+                                </article>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </section>
+            {% endfor %}
+        {% else %}
+            <div class="empty">Todavia no hay platos disponibles en el catalogo.</div>
+        {% endif %}
+    </main>
+</body>
+</html>
