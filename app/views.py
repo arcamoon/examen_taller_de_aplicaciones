@@ -1,5 +1,7 @@
 from flask import current_app, render_template
 
+from app import appbuilder
+
 """
     Create your Model based REST API::
 
