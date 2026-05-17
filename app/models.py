@@ -1,33 +1,15 @@
 from app import db
+from flask_appbuilder.security.sqla.models import User as AppBuilderUser
 from sqlalchemy import CheckConstraint, Enum, ForeignKey, Index
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import foreign, relationship
 
 
-class User(db.Model):
-    __tablename__ = "users"
-
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    username = db.Column(db.String(80), nullable=False, unique=True, index=True)
-    first_name = db.Column(db.String(120), nullable=False)
-    last_name = db.Column(db.String(120), nullable=False)
-    email = db.Column(db.String(255), nullable=False, unique=True, index=True)
-    password = db.Column(db.String(255), nullable=False)
-    role = db.Column(
-        Enum("cliente", "cajero", "admin", name="user_role"),
-        nullable=False,
-        default="cliente",
-    )
-    active = db.Column(db.Boolean, nullable=False, default=True)
-
-    reservas = relationship(
-        "Reserva",
-        back_populates="usuario",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-
-    def __repr__(self) -> str:
-        return self.username
+ab_user = db.Table(
+    "ab_user",
+    db.metadata,
+    db.Column("id", db.Integer, primary_key=True),
+    extend_existing=True,
+)
 
 
 class Reserva(db.Model):
@@ -49,11 +31,16 @@ class Reserva(db.Model):
     total_reserva = db.Column(db.Numeric(10, 2), nullable=False)
     id_usuario = db.Column(
         db.Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("ab_user.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    usuario = relationship("User", back_populates="reservas")
+    usuario = relationship(
+        AppBuilderUser,
+        primaryjoin=lambda: foreign(Reserva.id_usuario) == AppBuilderUser.id,
+        foreign_keys=lambda: [Reserva.id_usuario],
+        backref="reservas",
+    )
     detalles = relationship(
         "DetalleReserva",
         back_populates="reserva",

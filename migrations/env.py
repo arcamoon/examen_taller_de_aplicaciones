@@ -52,8 +52,13 @@ def get_metadata():
 
 
 def include_object(object, name, type_, reflected, compare_to):
-    if reflected and type_ == "table" and name.startswith("ab_"):
+    if name.startswith("ab_"):
         return False
+
+    table = getattr(object, "table", None)
+    if table is not None and table.name.startswith("ab_"):
+        return False
+
     return True
 
 
