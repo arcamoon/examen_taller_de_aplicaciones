@@ -3,6 +3,7 @@ import base64
 from flask import abort, current_app, jsonify, render_template, request
 from flask_appbuilder import ModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
+from flask_login import current_user
 from markupsafe import Markup
 from wtforms import FileField
 
@@ -198,6 +199,28 @@ def catalogo_detalle(plato_id):
 
     plato = Plato.query.filter_by(id_plato=id_plato, disponible=True).first_or_404()
     return render_template("catalogo_detalle.html", plato=plato)
+
+
+@current_app.route("/registrar_reserva/")
+def registrar_detalle_reserva():
+    if not current_user.is_authenticated:
+        return abort(401)
+    if "cajero" == current_user.roles[0].name:
+        return abort(401)
+
+    if request.method == "GET":
+        platos = (
+            Plato.query.filter(Plato.disponible.is_(True))
+            .join(Plato.categoria)
+            .order_by(CategoriaPlato.nombre.asc(), Plato.nombre.asc())
+            .all()
+        )
+
+        return render_template("registrar_reserva.html", platos=platos)
+    elif request.method == "POST":
+        return render_template("registrar_reserva.html")
+    else:
+        abort(404)
 
 
 @current_app.get("/api/catalogo/categorias/")

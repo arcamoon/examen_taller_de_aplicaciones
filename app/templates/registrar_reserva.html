@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Registrar Reserva</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+
+  <body class="bg-gray-100 min-h-screen p-6">
+    <div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-lg p-6">
+      <h1 class="text-3xl font-bold mb-6">Registrar Reserva</h1>
+
+      <div class="mb-6">
+        <label class="block font-semibold mb-2"> Fecha de la reserva </label>
+
+        <input
+          type="date"
+          name="fecha_reserva"
+          required
+          class="border rounded-lg p-2 w-full"
+        />
+      </div>
+      <!-- SELECT DE PLATOS -->
+      <div class="mb-6">
+        <label class="block font-semibold mb-2">Agregar plato</label>
+
+        <div class="flex gap-2">
+          <select id="platoSelect" class="border rounded-lg p-2 flex-1">
+            <option value="">Seleccione un plato</option>
+            {% for plato in platos %}
+            <option
+              value="{{ plato.id_plato }}"
+              data-nombre="{{ plato.nombre }}"
+              data-precio="{{ plato.precio_unitario }}"
+              data-stock="{{ plato.cantidad_disponible }}"
+            >
+              {{ plato.nombre }} - Bs {{ plato.precio_unitario }}
+            </option>
+            {% endfor %}
+          </select>
+
+          <button
+            type="button"
+            onclick="agregarPlato()"
+            class="bg-blue-600 text-white px-4 rounded-lg hover:bg-blue-700"
+          >
+            Agregar
+          </button>
+        </div>
+      </div>
+
+      <!-- LISTA DINÁMICA -->
+      <form method="POST">
+        <div id="lista" class="space-y-3"></div>
+
+        <div class="mt-6 flex justify-between items-center">
+          <p class="text-xl font-bold">
+            Total: Bs <span id="total">0.00</span>
+          </p>
+
+          <button
+            class="bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700"
+          >
+            Guardar Reserva
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <script>
+      let carrito = {};
+
+      function agregarPlato() {
+        const select = document.getElementById("platoSelect");
+        const option = select.options[select.selectedIndex];
+
+        const id = option.value;
+        if (!id) return;
+
+        const nombre = option.dataset.nombre;
+        const precio = parseFloat(option.dataset.precio);
+
+        if (!carrito[id]) {
+          carrito[id] = {
+            nombre,
+            precio,
+            cantidad: 1,
+          };
+        } else {
+          carrito[id].cantidad++;
+        }
+
+        render();
+      }
+
+      function cambiarCantidad(id, value) {
+        carrito[id].cantidad = parseInt(value);
+        render();
+      }
+
+      function eliminar(id) {
+        delete carrito[id];
+        render();
+      }
+
+      function render() {
+        const contenedor = document.getElementById("lista");
+        contenedor.innerHTML = "";
+
+        let total = 0;
+
+        for (const id in carrito) {
+          const item = carrito[id];
+          const subtotal = item.precio * item.cantidad;
+          total += subtotal;
+
+          contenedor.innerHTML += `
+      <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border">
+
+        <div>
+          <p class="font-semibold">${item.nombre}</p>
+          <p class="text-sm text-gray-500">Bs ${item.precio}</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+
+          <input 
+            type="number"
+            min="1"
+            value="${item.cantidad}"
+            class="border w-16 text-center rounded"
+            onchange="cambiarCantidad(${id}, this.value)"
+          >
+
+          <button type="button"
+            onclick="eliminar(${id})"
+            class="text-red-600 font-bold">
+            ✕
+          </button>
+
+        </div>
+
+        <!-- inputs ocultos para enviar a Flask -->
+        <input type="hidden" name="platos" value="${id}">
+        <input type="hidden" name="cantidad_${id}" value="${item.cantidad}">
+      </div>
+    `;
+        }
+
+        document.getElementById("total").innerText = total.toFixed(2);
+      }
+    </script>
+  </body>
+</html>
