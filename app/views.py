@@ -8,7 +8,7 @@ from wtforms import FileField
 
 from app import appbuilder
 from app.crypto import decrypt_id, encrypt_id
-from app.models import CategoriaPlato, Plato
+from app.models import CategoriaPlato, DetalleReserva, Plato, Reserva
 
 """
     Create your Model based REST API::
@@ -133,6 +133,17 @@ class PlatoModelView(ModelView):
         )
 
 
+class DetalleReservaModelView(ModelView):
+    datamodel = SQLAInterface(DetalleReserva)
+    include_route_methods = {"list", "show"}
+
+
+class ReservaModelView(ModelView):
+    datamodel = SQLAInterface(Reserva)
+
+    related_views = [DetalleReservaModelView]
+
+
 appbuilder.add_view(
     CategoriaPlatoModelView,
     "Categorias",
@@ -145,6 +156,20 @@ appbuilder.add_view(
     "Platos",
     icon="fa-cutlery",
     category="Restaurante",
+)
+
+appbuilder.add_view(
+    ReservaModelView,
+    "Reservas",
+    icon="fa-calendar",
+    category="Reservaciones",
+)
+
+appbuilder.add_view(
+    DetalleReservaModelView,
+    "Detalles de reserva",
+    icon="fa-list",
+    category="Reservaciones",
 )
 
 

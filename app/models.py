@@ -33,7 +33,6 @@ class User(db.Model):
 class Reserva(db.Model):
     __tablename__ = "reserva"
     __table_args__ = (
-        CheckConstraint("estado IN (0, 1, 2, 3)", name="ck_reserva_estado"),
         CheckConstraint("cantidad_personas > 0", name="ck_reserva_cantidad_personas"),
         CheckConstraint("total_reserva >= 0", name="ck_reserva_total"),
         Index("ix_reserva_id_usuario", "id_usuario"),
@@ -41,7 +40,11 @@ class Reserva(db.Model):
 
     id_reserva = db.Column(db.Integer, primary_key=True, autoincrement=True)
     fecha = db.Column(db.DateTime, nullable=False)
-    estado = db.Column(db.Integer, nullable=False, default=0)
+    estado = db.Column(
+        Enum("pendiente", "aprobado", "completado", "cancelado", name="estado_reserva"),
+        nullable=False,
+        default="pendiente",
+    )
     cantidad_personas = db.Column(db.Integer, nullable=False)
     total_reserva = db.Column(db.Numeric(10, 2), nullable=False)
     id_usuario = db.Column(
