@@ -78,6 +78,66 @@
             color: #676b73;
         }
 
+        .reservation {
+            margin-top: 24px;
+            border-top: 1px solid #deded8;
+            padding-top: 20px;
+        }
+
+        .reservation h2 {
+            margin: 0 0 14px;
+            font-size: 1.2rem;
+            letter-spacing: 0;
+        }
+
+        .field {
+            display: grid;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        label {
+            color: #34373d;
+            font-size: .92rem;
+            font-weight: 700;
+        }
+
+        input {
+            width: 100%;
+            border: 1px solid #cfcfca;
+            border-radius: 6px;
+            padding: 10px 11px;
+            font: inherit;
+        }
+
+        button {
+            width: 100%;
+            border: 0;
+            border-radius: 6px;
+            padding: 11px 14px;
+            background: #146c43;
+            color: #fff;
+            font: inherit;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .notice {
+            margin-top: 18px;
+            border: 1px solid #deded8;
+            border-radius: 8px;
+            padding: 14px;
+            color: #676b73;
+        }
+
+        .flash {
+            margin: 0 0 16px;
+            border-radius: 8px;
+            padding: 12px 14px;
+            background: #fff;
+            color: #34373d;
+        }
+
         @media (max-width: 760px) {
             .layout {
                 grid-template-columns: 1fr;
@@ -87,7 +147,14 @@
 </head>
 <body>
     <main>
-        <a href="{{ url_for('catalogo') }}">Volver al catalogo</a>
+        <a href="{{ url_for('cliente') if puede_reservar else url_for('catalogo') }}">Volver al catalogo</a>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
         <div class="layout">
             {% if plato.imagen %}
                 <img src="{{ plato.imagen }}" alt="{{ plato.nombre }}">
@@ -100,6 +167,29 @@
                 <div class="price">Bs {{ "%.2f"|format(plato.precio_unitario) }}</div>
                 <p class="description">{{ plato.descripcion or "Sin descripcion." }}</p>
                 <p class="stock">{{ plato.cantidad_disponible }} unidades disponibles</p>
+                {% if puede_reservar %}
+                    <form class="reservation" method="post" action="{{ url_for('cliente_crear_reserva', plato_id=plato_public_id) }}">
+                        <h2>Reservar</h2>
+                        <div class="field">
+                            <label for="fecha">Fecha y hora</label>
+                            <input id="fecha" name="fecha" type="datetime-local" required>
+                        </div>
+                        <div class="field">
+                            <label for="cantidad_personas">Personas</label>
+                            <input id="cantidad_personas" name="cantidad_personas" type="number" min="1" value="1" required>
+                        </div>
+                        <div class="field">
+                            <label for="cantidad">Cantidad del plato</label>
+                            <input id="cantidad" name="cantidad" type="number" min="1" max="{{ plato.cantidad_disponible }}" value="1" required>
+                        </div>
+                        <button type="submit">Crear reserva pendiente</button>
+                    </form>
+                {% else %}
+                    <div class="notice">
+                        Para reservar este plato ingresa como cliente.
+                        <a href="{{ url_for('login_cliente') }}">Ingresar</a>
+                    </div>
+                {% endif %}
             </section>
         </div>
     </main>
