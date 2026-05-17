@@ -4,9 +4,17 @@ class RoleService:
         ("can_show", "CategoriaPlatoModelView"),
         ("can_list", "PlatoModelView"),
         ("can_show", "PlatoModelView"),
+        ("can_list", "ReservaModelView"),
+        ("can_show", "ReservaModelView"),
+        ("can_edit", "ReservaModelView"),
+        ("can_list", "DetalleReservaModelView"),
+        ("can_show", "DetalleReservaModelView"),
         ("menu_access", "Categorias"),  # Permiso para ver el botón en el menú
         ("menu_access", "Platos"),
+        ("menu_access", "Reservas"),
+        ("menu_access", "Detalles de reserva"),
         ("menu_access", "Restaurante"),  # Permiso para ver el menú padre
+        ("menu_access", "Reservaciones"),
     ]
     permisos_cliente = [
         ("can_list", "PlatoModelView"),
@@ -29,9 +37,16 @@ class RoleService:
     def configure_custom_roles(self, appbuilder):
         sm = appbuilder.sm
 
-        cajero = sm.find_role("cajero")
-        # 3. Buscar los permisos en la base de datos y asociarlos al rol
-        for perm_name, view_name in self.permisos_cajero:
+        self._assign_permissions(sm, "cajero", self.permisos_cajero)
+        self._assign_permissions(sm, "cliente", self.permisos_cliente)
+
+    @staticmethod
+    def _assign_permissions(sm, role_name, permissions):
+        role = sm.find_role(role_name)
+        if not role:
+            return
+
+        for perm_name, view_name in permissions:
             permission_view = sm.find_permission_view_menu(perm_name, view_name)
-            if permission_view and permission_view not in cajero.permissions:
-                sm.add_permission_role(cajero, permission_view)
+            if permission_view and permission_view not in role.permissions:
+                sm.add_permission_role(role, permission_view)
