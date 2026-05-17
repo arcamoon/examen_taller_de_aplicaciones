@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mis reservas</title>
+    <style>
+        body {
+            margin: 0;
+            background: #f7f7f4;
+            color: #202124;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        main {
+            width: min(960px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 32px 0 48px;
+        }
+
+        nav {
+            display: flex;
+            gap: 18px;
+            margin-bottom: 22px;
+        }
+
+        a {
+            color: #146c43;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        h1 {
+            margin: 0 0 20px;
+            font-size: clamp(2rem, 6vw, 3rem);
+            letter-spacing: 0;
+        }
+
+        .flash,
+        .empty,
+        .reservation {
+            border: 1px solid #deded8;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .flash {
+            margin-bottom: 16px;
+            padding: 12px 14px;
+        }
+
+        .empty {
+            padding: 24px;
+            color: #676b73;
+        }
+
+        .list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .reservation {
+            padding: 16px;
+        }
+
+        .reservation__top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+        }
+
+        .status {
+            border-radius: 999px;
+            background: #e5f3eb;
+            color: #146c43;
+            padding: 5px 10px;
+            font-size: .86rem;
+            font-weight: 800;
+        }
+
+        .meta {
+            margin-top: 10px;
+            color: #676b73;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <nav>
+            <a href="{{ url_for('cliente') }}">Catalogo</a>
+            <a href="{{ url_for('AuthDBView.logout') }}">Salir</a>
+        </nav>
+        <h1>Mis reservas</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        {% if reservas %}
+            <section class="list">
+                {% for reserva in reservas %}
+                    <article class="reservation">
+                        <div class="reservation__top">
+                            <strong>Reserva {{ reserva.public_id }}</strong>
+                            <span class="status">{{ reserva.estado }}</span>
+                        </div>
+                        <div class="meta">
+                            {{ reserva.fecha.strftime("%Y-%m-%d %H:%M") }} ·
+                            {{ reserva.cantidad_personas }} personas ·
+                            Bs {{ "%.2f"|format(reserva.total_reserva) }}
+                        </div>
+                    </article>
+                {% endfor %}
+            </section>
+        {% else %}
+            <div class="empty">Todavia no tienes reservas.</div>
+        {% endif %}
+    </main>
+</body>
+</html>
