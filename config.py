@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 from flask_appbuilder.security.manager import (
     AUTH_REMOTE_USER,
     AUTH_DB,
@@ -7,19 +8,29 @@ from flask_appbuilder.security.manager import (
 )
 
 basedir = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(basedir, ".env"))
+
+
+def build_database_uri() -> str:
+    return (
+        "postgresql+psycopg2://"
+        f"{os.getenv('POSTGRES_USER', 'postgres')}:"
+        f"{os.getenv('POSTGRES_PASSWORD', 'postgres')}@"
+        f"{os.getenv('POSTGRES_HOST', 'localhost')}:"
+        f"{os.getenv('POSTGRES_PORT', '5432')}/"
+        f"{os.getenv('POSTGRES_DB', 'examen_taller_de_aplicaciones')}"
+    )
 
 # Your App secret key
-SECRET_KEY = "f14f99cccf3461434cd03bbe74140e89c44079124b3ea6bfc61be745a0c4bac0"
+SECRET_KEY = os.getenv("APP_SECRET_KEY", "change-me")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-me")
+AES256_KEY = os.getenv("AES256_KEY", "")
 
 # The SQLAlchemy connection string.
 # SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(basedir, "app.db")
 # SQLALCHEMY_DATABASE_URI = 'mysql://myapp@localhost/myapp'
 # SQLALCHEMY_DATABASE_URI = 'postgresql://root:password@localhost/myapp'
-SQLALCHEMY_DATABASE_URI = (
-    "postgresql+psycopg2://postgres:postgres@localhost/examen_taller_de_aplicaciones"
-)
-
-SQLALCHEMY_TRACK_MODIFICATIONS = False
+SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", build_database_uri())
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
@@ -114,4 +125,3 @@ IMG_UPLOAD_URL = "/static/uploads/"
 # APP_THEME = "spacelab.css"
 # APP_THEME = "united.css"
 # APP_THEME = "yeti.css"
-
