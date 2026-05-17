@@ -3,6 +3,9 @@ from flask_appbuilder import AppBuilder
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 
+from app.services.RoleService import RoleService
+
+
 db = SQLAlchemy()
 appbuilder = AppBuilder()
 migrate = Migrate()
@@ -24,9 +27,12 @@ def create_app() -> Flask:
 
         from app import views  # noqa: F401
 
+        # Creación y configuracion de roles
+        role_service = RoleService()
+        role_service.init_custom_roles(appbuilder)
+        role_service.configure_custom_roles(appbuilder)
         # Aquí abajo continúan tus registros de vistas/APIs...
         # ...
-
     return app
 
 
