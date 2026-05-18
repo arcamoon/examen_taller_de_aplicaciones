@@ -1,0 +1,40 @@
+<nav class="bg-white shadow-md px-6 py-4">
+  <ul class="flex justify-end gap-4">
+    {% if request.path != '/cliente/' %}
+    <li>
+      <a
+        href="/cliente/"
+        class="bg-green-500 hover:bg-green-600 text-white font-medium px-4 py-2 rounded-lg transition"
+      >
+        Catálogo
+      </a>
+    </li>
+    {% endif %} {% if request.path != '/cliente/reservas/' %}
+    <li>
+      <a
+        href="/cliente/reservas/"
+        class="bg-blue-500 hover:bg-blue-600 text-white font-medium px-4 py-2 rounded-lg transition"
+      >
+        Mis Reservas
+      </a>
+    </li>
+    {% endif %} {% if request.path != '/cliente/registrar_reserva/' %}
+    <li>
+      <a
+        href="/cliente/registrar_reserva/"
+        class="bg-yellow-500 hover:bg-yellow-600 text-white font-medium px-4 py-2 rounded-lg transition"
+      >
+        Registrar mi reserva
+      </a>
+    </li>
+    {% endif %}
+    <li>
+      <a
+        class="bg-red-500 hover:bg-red-600 text-white font-medium px-4 py-2 rounded-lg transition"
+        href="{{ url_for('AuthDBView.logout') }}"
+      >
+        Logout
+      </a>
+    </li>
+  </ul>
+</nav>

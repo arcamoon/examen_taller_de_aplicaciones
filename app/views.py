@@ -424,10 +424,10 @@ def catalogo_detalle(plato_id):
     )
 
 
-@current_app.route("/registrar_reserva/", methods=["GET", "POST"])
+@current_app.route("/cliente/registrar_reserva/", methods=["GET", "POST"])
 @login_required
 def registrar_detalle_reserva():
-    if "cajero" == current_user.roles[0].name:
+    if "cliente" != current_user.roles[0].name:
         return abort(401)
 
     if request.method == "GET":
