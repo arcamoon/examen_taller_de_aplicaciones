@@ -1,0 +1,268 @@
+{% extends "appbuilder/baselayout.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="page-header">Reportes y Estadísticas</h1>
+    
+    <!-- Tarjetas de estadísticas principales -->
+    <div class="row">
+        <div class="col-lg-3 col-md-6">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <div class="row">
+                        <div class="col-xs-3">
+                            <i class="fa fa-calendar fa-5x"></i>
+                        </div>
+                        <div class="col-xs-9 text-right">
+                            <div class="huge">{{ stats.total_reservas }}</div>
+                            <div>Total Reservas</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="panel panel-green">
+                <div class="panel-heading">
+                    <div class="row">
+                        <div class="col-xs-3">
+                            <i class="fa fa-dollar fa-5x"></i>
+                        </div>
+                        <div class="col-xs-9 text-right">
+                            <div class="huge">${{ stats.total_ingresos }}</div>
+                            <div>Ingresos Totales</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="panel panel-yellow">
+                <div class="panel-heading">
+                    <div class="row">
+                        <div class="col-xs-3">
+                            <i class="fa fa-users fa-5x"></i>
+                        </div>
+                        <div class="col-xs-9 text-right">
+                            <div class="huge">{{ stats.total_clientes }}</div>
+                            <div>Clientes Únicos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="panel panel-red">
+                <div class="panel-heading">
+                    <div class="row">
+                        <div class="col-xs-3">
+                            <i class="fa fa-cutlery fa-5x"></i>
+                        </div>
+                        <div class="col-xs-9 text-right">
+                            <div class="huge">{{ stats.total_platos_vendidos }}</div>
+                            <div>Platos Vendidos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Gráficas -->
+    <div class="row">
+        <!-- Gráfica de barras - Reservas por estado -->
+        <div class="col-lg-6">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-bar-chart"></i> Reservas por Estado</h3>
+                </div>
+                <div class="panel-body">
+                    <canvas id="graficaEstados"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Gráfica de pastel - Ingresos por categoría -->
+        <div class="col-lg-6">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-pie-chart"></i> Ingresos por Categoría de Plato</h3>
+                </div>
+                <div class="panel-body">
+                    <canvas id="graficaCategorias"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Gráfica de líneas - Reservas por fecha -->
+        <div class="col-lg-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-line-chart"></i> Reservas por Día (Últimos 30 días)</h3>
+                </div>
+                <div class="panel-body">
+                    <canvas id="graficaLineaTiempo"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tabla de estadísticas detallada -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-table"></i> Estadísticas Detalladas por Categoría</h3>
+                </div>
+                <div class="panel-body">
+                    <table class="table table-striped table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Categoría</th>
+                                <th>Platos Vendidos (Conteo)</th>
+                                <th>Ingresos Totales (Suma)</th>
+                                <th>Promedio por Plato</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cat in stats_por_categoria %}
+                            <tr>
+                                <td>{{ cat.nombre }}</td>
+                                <td>{{ cat.cantidad_vendida }}</td>
+                                <td>${{ cat.ingresos_totales }}</td>
+                                <td>${{ cat.promedio }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Datos desde el backend
+    const datosEstados = {{ datos_estados|tojson }};
+    const datosCategorias = {{ datos_categorias|tojson }};
+    const datosLineaTiempo = {{ datos_linea_tiempo|tojson }};
+    
+    // Gráfica de Barras - Reservas por Estado
+    const ctxEstados = document.getElementById('graficaEstados').getContext('2d');
+    new Chart(ctxEstados, {
+        type: 'bar',
+        data: {
+            labels: datosEstados.map(d => d.estado),
+            datasets: [{
+                label: 'Número de Reservas',
+                data: datosEstados.map(d => d.cantidad),
+                backgroundColor: [
+                    'rgba(255, 206, 86, 0.7)',  // pendiente - amarillo
+                    'rgba(54, 162, 235, 0.7)',  // aprobado - azul
+                    'rgba(75, 192, 192, 0.7)',  // completado - verde azulado
+                    'rgba(255, 99, 132, 0.7)'   // cancelado - rojo
+                ],
+                borderColor: [
+                    'rgba(255, 206, 86, 1)',
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(255, 99, 132, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+    
+    // Gráfica de Pastel - Ingresos por Categoría
+    const ctxCategorias = document.getElementById('graficaCategorias').getContext('2d');
+    new Chart(ctxCategorias, {
+        type: 'pie',
+        data: {
+            labels: datosCategorias.map(d => d.nombre),
+            datasets: [{
+                data: datosCategorias.map(d => d.ingresos),
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.7)',
+                    'rgba(54, 162, 235, 0.7)',
+                    'rgba(255, 206, 86, 0.7)',
+                    'rgba(75, 192, 192, 0.7)',
+                    'rgba(153, 102, 255, 0.7)',
+                    'rgba(255, 159, 64, 0.7)'
+                ],
+                borderColor: [
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 206, 86, 1)',
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(153, 102, 255, 1)',
+                    'rgba(255, 159, 64, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.label || '';
+                            let value = context.parsed;
+                            return label + ': $' + value.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Gráfica de Líneas - Reservas por día
+    const ctxLinea = document.getElementById('graficaLineaTiempo').getContext('2d');
+    new Chart(ctxLinea, {
+        type: 'line',
+        data: {
+            labels: datosLineaTiempo.map(d => d.fecha),
+            datasets: [{
+                label: 'Reservas por día',
+                data: datosLineaTiempo.map(d => d.cantidad),
+                fill: true,
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
