@@ -14,6 +14,7 @@ from flask import (
 )
 from flask_appbuilder import ModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
+from flask_appbuilder.security.sqla.models import Role, User
 from flask_login import current_user, login_required, login_user
 from markupsafe import Markup
 from wtforms import DateTimeLocalField, FileField
@@ -454,6 +455,99 @@ def registrar_detalle_reserva():
             total_reserva=Decimal("0.00"),
             estado="pendiente",
             id_usuario=current_user.id,
+        )
+
+        db.session.add(reserva)
+        db.session.flush()  # 👈 necesario para obtener id_reserva
+
+        total = Decimal("0.00")
+
+        # =========================
+        # DETALLES (dinámicos)
+        # =========================
+
+        # request.form trae:
+        # platos = [1,2,3,...]
+        platos_ids = request.form.getlist("platos")
+
+        for id_plato in platos_ids:
+            cantidad = request.form.get(f"cantidad_{id_plato}")
+
+            plato = Plato.query.get(id_plato)
+
+            if not plato:
+                continue
+
+            # 🚫 VALIDACIÓN STOCK (backend obligatorio)
+            if int(cantidad) > plato.cantidad_disponible:
+                db.session.rollback()
+                return f"Stock insuficiente para {plato.nombre}", 400
+
+            subtotal = Decimal(plato.precio_unitario) * int(cantidad)
+            total += subtotal
+
+            detalle = DetalleReserva(
+                cantidad=int(cantidad),
+                precio_unitario=plato.precio_unitario,
+                subtotal=subtotal,
+                id_reserva=reserva.id_reserva,
+                id_plato=plato.id_plato,
+            )
+
+            db.session.add(detalle)
+
+            # opcional: descontar stock
+            plato.cantidad_disponible -= int(cantidad)
+
+        # =========================
+        # FINALIZAR RESERVA
+        # =========================
+
+        reserva.total_reserva = total
+
+        db.session.commit()
+
+        return redirect("/registrar_reserva/")
+    else:
+        abort(404)
+
+
+@current_app.route("/cajero/registrar_reserva/", methods=["GET", "POST"])
+@login_required
+def registrar_detalle_reserva_cajero():
+    if "cajero" != current_user.roles[0].name:
+        return abort(401)
+
+    if request.method == "GET":
+        usuarios = (
+            db.session.query(User).join(User.roles).filter(Role.name == "cliente").all()
+        )
+        platos = (
+            Plato.query.filter(Plato.disponible.is_(True))
+            .join(Plato.categoria)
+            .order_by(CategoriaPlato.nombre.asc(), Plato.nombre.asc())
+            .all()
+        )
+
+        return render_template(
+            "registrar_reserva_cajero.html", platos=platos, usuarios=usuarios
+        )
+    elif request.method == "POST":
+        id_usuario = request.form.get("id_usuario")
+        fecha = request.form.get("fecha_reserva")
+
+        hora = request.form.get("hora_reserva")
+        cantidad_personas = request.form.get("cantidad_personas")
+
+        fecha_hora = datetime.strptime(f"{fecha} {hora}", "%Y-%m-%d %H:%M")
+
+        # 🔥 crear reserva base
+        reserva = Reserva(
+            fecha=fecha_hora,
+            cantidad_personas=cantidad_personas,
+            total_reserva=Decimal("0.00"),
+            estado="pendiente",
+            id_usuario=int(id_usuario),
         )
 
         db.session.add(reserva)
