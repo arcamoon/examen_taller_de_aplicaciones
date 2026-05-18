@@ -666,3 +666,113 @@ def page_not_found(e):
         ),
         404,
     )
+
+@current_app.route("/reportes/")
+@login_required
+def reportes():
+    roles = {role.name for role in current_user.roles}
+    if "Admin" not in roles:
+        abort(403)
+    
+    from sqlalchemy import func
+    
+    # --- ESTADÍSTICAS GENERALES (Conteos y Sumatorias) ---
+    
+    # Total de reservas (conteo)
+    total_reservas = db.session.query(func.count(Reserva.id_reserva)).scalar() or 0
+    
+    # Total de ingresos (sumatoria)
+    total_ingresos = db.session.query(func.sum(Reserva.total_reserva)).scalar() or 0
+    
+    # Total de clientes únicos (conteo distinct)
+    total_clientes = db.session.query(func.count(func.distinct(Reserva.id_usuario))).scalar() or 0
+    
+    # Total de platos vendidos (sumatoria de cantidades)
+    total_platos_vendidos = db.session.query(func.sum(DetalleReserva.cantidad)).scalar() or 0
+    
+    stats = {
+        "total_reservas": int(total_reservas),
+        "total_ingresos": str(total_ingresos),
+        "total_clientes": int(total_clientes),
+        "total_platos_vendidos": int(total_platos_vendidos),
+    }
+    
+    # --- AGRUPACIÓN POR ESTADO (para gráfica de barras) ---
+    resultados_estado = (
+        db.session.query(Reserva.estado, func.count(Reserva.id_reserva))
+        .group_by(Reserva.estado)
+        .all()
+    )
+    datos_estados = [
+        {"estado": estado, "cantidad": cantidad}
+        for estado, cantidad in resultados_estado
+    ]
+    
+    # --- AGRUPACIÓN POR CATEGORÍA CON SUMAS (para gráfica de pastel y tabla) ---
+    resultados_categoria = (
+        db.session.query(
+            CategoriaPlato.nombre,
+            func.sum(DetalleReserva.cantidad).label("cantidad_vendida"),
+            func.sum(DetalleReserva.subtotal).label("ingresos_totales"),
+        )
+        .join(Plato, Plato.id_categoria == CategoriaPlato.id_categoria)
+        .join(DetalleReserva, DetalleReserva.id_plato == Plato.id_plato)
+        .group_by(CategoriaPlato.id_categoria, CategoriaPlato.nombre)
+        .order_by(func.sum(DetalleReserva.subtotal).desc())
+        .all()
+    )
+    
+    datos_categorias = [
+        {"nombre": nombre, "ingresos": float(ingresos) if ingresos else 0}
+        for nombre, _, ingresos in resultados_categoria
+    ]
+    
+    stats_por_categoria = [
+        {
+            "nombre": nombre,
+            "cantidad_vendida": int(cantidad_vendida) if cantidad_vendida else 0,
+            "ingresos_totales": str(ingresos_totales) if ingresos_totales else "0.00",
+            "promedio": str(ingresos_totales / cantidad_vendida) if cantidad_vendida and ingresos_totales else "0.00",
+        }
+        for nombre, cantidad_vendida, ingresos_totales in resultados_categoria
+    ]
+    
+    # --- AGRUPACIÓN POR FECHA (últimos 30 días) - Para gráfica de líneas ---
+    from datetime import timedelta
+    
+    fecha_inicio = datetime.now() - timedelta(days=30)
+    
+    resultados_fecha = (
+        db.session.query(
+            func.date(Reserva.fecha).label("fecha"),
+            func.count(Reserva.id_reserva).label("cantidad"),
+        )
+        .filter(Reserva.fecha >= fecha_inicio)
+        .group_by(func.date(Reserva.fecha))
+        .order_by(func.date(Reserva.fecha).asc())
+        .all()
+    )
+    
+    datos_linea_tiempo = [
+        {"fecha": fecha.strftime("%Y-%m-%d") if fecha else "", "cantidad": cantidad}
+        for fecha, cantidad in resultados_fecha
+    ]
+    
+    return render_template(
+        "reportes.html",
+        stats=stats,
+        datos_estados=datos_estados,
+        datos_categorias=datos_categorias,
+        datos_linea_tiempo=datos_linea_tiempo,
+        stats_por_categoria=stats_por_categoria,
+        appbuilder=appbuilder,
+    )
+
+appbuilder.add_link(
+    "Reportes",
+    label="Reportes",
+    href="/reportes/",
+    icon="fa-chart-bar",
+    category="Administración",
+    category_icon="fa-cogs",
+)
