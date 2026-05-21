@@ -1263,6 +1263,279 @@ Proporciona un análisis detallado que ayude a tomar decisiones estratégicas.
         appbuilder=appbuilder,
     )
 
+@current_app.route("/reporte-inteligente/")
+@login_required
+def reporte_inteligente():
+    roles = {role.name for role in current_user.roles}
+    if "Admin" not in roles:
+        abort(403)
+
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+
+    # =========================================================
+    # PREDICCIÓN / RECOMENDACIÓN INTELIGENTE
+    # =========================================================
+    #
+    # Este reporte implementa:
+    #
+    # 1. Predicción de demanda
+    # 2. Recomendaciones automáticas
+    # 3. Identificación de categorías débiles
+    # 4. Sugerencias de mejora generadas por IA
+    #
+    # MODELO UTILIZADO:
+    #
+    # Se utiliza un modelo heurístico basado en:
+    # - Tendencia histórica de ventas
+    # - Promedio móvil de reservas
+    # - Frecuencia de platos vendidos
+    # - Comparación entre periodos
+    #
+    # Luego la IA interpreta esos datos y genera
+    # recomendaciones inteligentes.
+    #
+    # =========================================================
+
+    # ---------------------------------------------------------
+    # RANGO DE FECHAS
+    # ---------------------------------------------------------
+    hoy = datetime.now()
+    hace_7 = hoy - timedelta(days=7)
+    hace_14 = hoy - timedelta(days=14)
+    hace_30 = hoy - timedelta(days=30)
+
+    # =========================================================
+    # 1. PREDICCIÓN DE DEMANDA
+    # =========================================================
+
+    # Reservas últimos 7 días
+    reservas_7_dias = (
+        db.session.query(
+            func.date(Reserva.fecha),
+            func.count(Reserva.id_reserva)
+        )
+        .filter(Reserva.fecha >= hace_7)
+        .group_by(func.date(Reserva.fecha))
+        .all()
+    )
+
+    total_7_dias = sum(cantidad for _, cantidad in reservas_7_dias)
+
+    promedio_diario = (
+        total_7_dias / len(reservas_7_dias)
+        if reservas_7_dias else 0
+    )
+
+    # Predicción simple próxima semana
+    prediccion_proxima_semana = int(round(promedio_diario * 7))
+
+    # =========================================================
+    # 2. COMPARACIÓN DE CRECIMIENTO
+    # =========================================================
+
+    ventas_actuales = float(
+        (
+            db.session.query(func.sum(Reserva.total_reserva))
+            .filter(Reserva.fecha >= hace_7)
+            .scalar()
+        ) or 0
+    )
+
+    ventas_anteriores = float(
+        (
+            db.session.query(func.sum(Reserva.total_reserva))
+            .filter(
+                Reserva.fecha >= hace_14,
+                Reserva.fecha < hace_7
+            )
+            .scalar()
+        ) or 0
+    )
+
+    crecimiento = (
+        ((ventas_actuales - ventas_anteriores) / ventas_anteriores) * 100
+        if ventas_anteriores > 0 else 0
+    )
+
+    # =========================================================
+    # 3. PLATOS MÁS DEMANDADOS
+    # =========================================================
+
+    resultados_platos = (
+        db.session.query(
+            Plato.nombre,
+            func.sum(DetalleReserva.cantidad).label("cantidad")
+        )
+        .join(
+            DetalleReserva,
+            DetalleReserva.id_plato == Plato.id_plato
+        )
+        .group_by(Plato.id_plato, Plato.nombre)
+        .order_by(func.sum(DetalleReserva.cantidad).desc())
+        .limit(5)
+        .all()
+    )
+
+    platos_recomendados = [
+        {
+            "nombre": nombre,
+            "cantidad": int(cantidad)
+        }
+        for nombre, cantidad in resultados_platos
+    ]
+
+    # =========================================================
+    # 4. CATEGORÍAS CON BAJO RENDIMIENTO
+    # =========================================================
+
+    resultados_categorias = (
+        db.session.query(
+            CategoriaPlato.nombre,
+            func.sum(DetalleReserva.subtotal).label("ingresos")
+        )
+        .join(
+            Plato,
+            Plato.id_categoria == CategoriaPlato.id_categoria
+        )
+        .join(
+            DetalleReserva,
+            DetalleReserva.id_plato == Plato.id_plato
+        )
+        .group_by(
+            CategoriaPlato.id_categoria,
+            CategoriaPlato.nombre
+        )
+        .order_by(func.sum(DetalleReserva.subtotal).asc())
+        .all()
+    )
+
+    categorias_bajo_rendimiento = [
+        {
+            "nombre": nombre,
+            "ingresos": float(ingresos or 0)
+        }
+        for nombre, ingresos in resultados_categorias[:3]
+    ]
+
+    # =========================================================
+    # 5. HORARIOS MÁS DEMANDADOS
+    # =========================================================
+
+    resultados_horas = (
+        db.session.query(
+            func.extract("hour", Reserva.fecha).label("hora"),
+            func.count(Reserva.id_reserva).label("cantidad")
+        )
+        .group_by(func.extract("hour", Reserva.fecha))
+        .order_by(func.count(Reserva.id_reserva).desc())
+        .limit(5)
+        .all()
+    )
+
+    horas_pico = [
+        {
+            "hora": int(hora),
+            "cantidad": int(cantidad)
+        }
+        for hora, cantidad in resultados_horas
+    ]
+
+    # =========================================================
+    # 6. RESULTADO VISUAL
+    # =========================================================
+
+    datos_prediccion = {
+        "promedio_diario": round(promedio_diario, 2),
+        "prediccion_semana": prediccion_proxima_semana,
+        "ventas_actuales": float(ventas_actuales),
+        "ventas_anteriores": float(ventas_anteriores),
+        "crecimiento": round(crecimiento, 2)
+    }
+
+    # =========================================================
+    # 7. CONTEXTO PARA IA
+    # =========================================================
+
+    contexto_ia = {
+        "prediccion_demanda": datos_prediccion,
+        "platos_recomendados": platos_recomendados,
+        "categorias_bajo_rendimiento": categorias_bajo_rendimiento,
+        "horas_pico": horas_pico
+    }
+
+    # =========================================================
+    # 8. GENERAR RECOMENDACIONES CON IA
+    # =========================================================
+
+    analisis_ia = None
+
+    try:
+
+        prompt_ia = """
+Realiza un REPORTE INTELIGENTE DEL NEGOCIO basado en los datos entregados.
+
+Debes incluir:
+
+1. Predicción de demanda esperada
+2. Interpretación del crecimiento o disminución de ventas
+3. Productos más recomendados para promocionar
+4. Categorías con bajo rendimiento y posibles causas
+5. Horarios donde debería reforzarse atención o stock
+6. Recomendaciones estratégicas accionables
+7. Conclusión general del estado del negocio
+
+El análisis debe ser claro, técnico y útil para toma de decisiones.
+"""
+
+        analisis_ia = preguntar_ia(
+            prompt_ia,
+            contexto_ia
+        )
+
+    except Exception as e:
+        current_app.logger.error(
+            f"Error generando reporte inteligente: {str(e)}"
+        )
+
+        analisis_ia = (
+            "No se pudo generar el análisis inteligente."
+        )
+
+    # =========================================================
+    # 9. RENDER
+    # =========================================================
+
+    return render_template(
+        "reporte_inteligente.html",
+
+        # Predicción
+        datos_prediccion=datos_prediccion,
+
+        # Recomendaciones
+        platos_recomendados=platos_recomendados,
+
+        # Riesgos
+        categorias_bajo_rendimiento=categorias_bajo_rendimiento,
+
+        # Horarios
+        horas_pico=horas_pico,
+
+        # IA
+        analisis_ia=analisis_ia,
+
+        # Modelo explicado
+        modelo_utilizado="""
+Modelo heurístico de predicción basado en:
+- promedio móvil de reservas
+- tendencia histórica de ventas
+- frecuencia de productos vendidos
+- análisis comparativo entre periodos
+- interpretación mediante IA
+""",
+
+        appbuilder=appbuilder
+    )
 
 # Menú desplegable para Reportes
 try:
@@ -1284,4 +1557,12 @@ appbuilder.add_link(
     href="/reporte-tendencias/",
     icon="fa-line-chart",
     category="Administración",
+)
+
+appbuilder.add_link(
+    'Reporte Inteligente',
+    label='Reporte Inteligente',
+    href='/reporte-inteligente/',
+    icon='fa-robot',
+    category='Administración'
 )

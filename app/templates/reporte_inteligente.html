@@ -1,0 +1,141 @@
+{% extends "appbuilder/baselayout.html" %}
+
+{% block content %}
+
+<div class="container mt-4">
+
+  <h1 class="mb-4">
+    Reporte Inteligente
+  </h1>
+
+  <!-- MODELO -->
+  <div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+      Modelo utilizado
+    </div>
+
+    <div class="card-body">
+      <p>{{ modelo_utilizado }}</p>
+    </div>
+  </div>
+
+  <!-- PREDICCIÓN -->
+  <div class="row">
+
+    <div class="col-md-4">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <h5>Promedio diario</h5>
+          <h2>{{ datos_prediccion.promedio_diario }}</h2>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <h5>Predicción próxima semana</h5>
+          <h2>{{ datos_prediccion.prediccion_semana }}</h2>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <h5>Crecimiento</h5>
+
+          <h2>
+            {{ datos_prediccion.crecimiento }}%
+          </h2>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PLATOS RECOMENDADOS -->
+  <div class="card mb-4">
+    <div class="card-header">
+      Productos recomendados
+    </div>
+
+    <div class="card-body">
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Cantidad vendida</th>
+          </tr>
+        </thead>
+
+        <tbody>
+
+          {% for plato in platos_recomendados %}
+          <tr>
+            <td>{{ plato.nombre }}</td>
+            <td>{{ plato.cantidad }}</td>
+          </tr>
+          {% endfor %}
+
+        </tbody>
+      </table>
+
+    </div>
+  </div>
+
+  <!-- CATEGORÍAS DÉBILES -->
+  <div class="card mb-4">
+
+    <div class="card-header bg-warning">
+      Categorías con bajo rendimiento
+    </div>
+
+    <div class="card-body">
+
+      <table class="table">
+
+        <thead>
+          <tr>
+            <th>Categoría</th>
+            <th>Ingresos</th>
+          </tr>
+        </thead>
+
+        <tbody>
+
+          {% for categoria in categorias_bajo_rendimiento %}
+          <tr>
+            <td>{{ categoria.nombre }}</td>
+            <td>{{ categoria.ingresos }}</td>
+          </tr>
+          {% endfor %}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+  <!-- IA -->
+  <div class="card mb-5">
+
+    <div class="card-header bg-success text-white">
+      Recomendaciones generadas por IA
+    </div>
+
+    <div class="card-body">
+
+      <pre style="white-space: pre-wrap;">
+{{ analisis_ia }}
+      </pre>
+
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
