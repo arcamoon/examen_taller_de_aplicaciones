@@ -14,7 +14,7 @@ from flask import (
 )
 from flask_appbuilder import BaseView, ModelView, expose
 from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.security.sqla.models import Role, User
+from flask_appbuilder.security.sqla.models import Role, User as AppBuilderUser
 from flask_login import current_user, login_required, login_user
 from markupsafe import Markup
 from wtforms import DateTimeLocalField, FileField
@@ -786,6 +786,148 @@ def reportes():
         for fecha, cantidad in resultados_fecha
     ]
 
+    # --- ANÁLISIS DE TENDENCIAS Y COMPORTAMIENTO ---
+    
+    # Horarios con mayor actividad (por hora del día)
+    resultados_horas = (
+        db.session.query(
+            func.extract('hour', Reserva.fecha).label('hora'),
+            func.count(Reserva.id_reserva).label('cantidad')
+        )
+        .group_by(func.extract('hour', Reserva.fecha))
+        .order_by(func.count(Reserva.id_reserva).desc())
+        .limit(5)
+        .all()
+    )
+    
+    horas_pico = [
+        {"hora": int(hora), "cantidad": int(cantidad)}
+        for hora, cantidad in resultados_horas
+    ]
+    
+    # Clientes más frecuentes
+    resultados_clientes = (
+        db.session.query(
+            AppBuilderUser.username,
+            AppBuilderUser.first_name,
+            AppBuilderUser.last_name,
+            func.count(Reserva.id_reserva).label('total_reservas')
+        )
+        .join(Reserva, Reserva.id_usuario == AppBuilderUser.id)
+        .group_by(AppBuilderUser.id, AppBuilderUser.username, 
+                  AppBuilderUser.first_name, AppBuilderUser.last_name)
+        .order_by(func.count(Reserva.id_reserva).desc())
+        .limit(5)
+        .all()
+    )
+    
+    clientes_frecuentes = [
+        {
+            "username": username,
+            "nombre": f"{first_name or ''} {last_name or ''}".strip() or username,
+            "total_reservas": int(total)
+        }
+        for username, first_name, last_name, total in resultados_clientes
+    ]
+    
+    # Tendencia de ventas (comparativa últimos 15 días vs 15 anteriores)
+    fecha_corte = datetime.now() - timedelta(days=15)
+    fecha_inicio_anterior = datetime.now() - timedelta(days=30)
+    
+    ventas_ultimos_15 = (
+        db.session.query(func.sum(Reserva.total_reserva))
+        .filter(Reserva.fecha >= fecha_corte)
+        .scalar() or 0
+    )
+    
+    ventas_15_anteriores = (
+        db.session.query(func.sum(Reserva.total_reserva))
+        .filter(Reserva.fecha >= fecha_inicio_anterior, Reserva.fecha < fecha_corte)
+        .scalar() or 0
+    )
+    
+    tendencia_ventas = {
+        "periodo_actual": str(ventas_ultimos_15),
+        "periodo_anterior": str(ventas_15_anteriores),
+        "crecimiento": float(((ventas_ultimos_15 - ventas_15_anteriores) / ventas_15_anteriores * 100) if ventas_15_anteriores > 0 else 0)
+    }
+    
+    # Platos más vendidos (top 5)
+    resultados_platos = (
+        db.session.query(
+            Plato.nombre,
+            func.sum(DetalleReserva.cantidad).label('cantidad_vendida')
+        )
+        .join(DetalleReserva, DetalleReserva.id_plato == Plato.id_plato)
+        .group_by(Plato.id_plato, Plato.nombre)
+        .order_by(func.sum(DetalleReserva.cantidad).desc())
+        .limit(5)
+        .all()
+    )
+    
+    platos_mas_vendidos = [
+        {"nombre": nombre, "cantidad": int(cantidad)}
+        for nombre, cantidad in resultados_platos
+    ]
+
+    # --- GENERAR ANÁLISIS CON IA ---
+    
+    # Contexto para Reporte 1 - Análisis General
+    contexto_reporte_1 = {
+        "metricas_generales": stats,
+        "reservas_por_estado": datos_estados,
+        "ingresos_por_categoria": datos_categorias,
+        "platos_mas_vendidos": platos_mas_vendidos,
+        "tendencia_ventas": tendencia_ventas
+    }
+    
+    # Contexto para Reporte 2 - Tendencias y Comportamiento
+    contexto_reporte_2 = {
+        "horas_pico": horas_pico,
+        "clientes_frecuentes": clientes_frecuentes,
+        "tendencia_ventas": tendencia_ventas,
+        "evolucion_diaria": datos_linea_tiempo,
+        "categorias_rendimiento": stats_por_categoria
+    }
+    
+    analisis_ia_general = None
+    analisis_ia_tendencias = None
+    
+    try:
+        # Generar análisis general con IA
+        prompt_general = """
+Realiza un ANÁLISIS GENERAL DEL SISTEMA basado en las métricas proporcionadas. Incluye:
+
+1. Resumen ejecutivo del estado actual del negocio
+2. Interpretación de las métricas principales (ventas, reservas, clientes)
+3. Identificación de los productos/servicios más exitosos
+4. Evaluación del rendimiento general
+5. Recomendaciones clave para mejorar el negocio
+
+Sé específico con los datos proporcionados y proporciona insights accionables.
+"""
+        analisis_ia_general = preguntar_ia(prompt_general, contexto_reporte_1)
+        
+        # Generar análisis de tendencias con IA
+        prompt_tendencias = """
+Realiza un ANÁLISIS DE TENDENCIAS Y COMPORTAMIENTO basado en los datos proporcionados. Incluye:
+
+1. Patrones temporales identificados (horarios pico, días con mayor actividad)
+2. Perfil de clientes más frecuentes y su comportamiento
+3. Tendencia de ventas (crecimiento o disminución)
+4. Servicios/productos con mejor y peor rendimiento
+5. Proyecciones o recomendaciones basadas en las tendencias observadas
+
+Proporciona un análisis detallado que ayude a tomar decisiones estratégicas.
+"""
+        analisis_ia_tendencias = preguntar_ia(prompt_tendencias, contexto_reporte_2)
+        
+    except Exception as e:
+        # Si falla la IA, continuar sin el análisis
+        current_app.logger.error(f"Error generando análisis con IA: {str(e)}")
+        analisis_ia_general = "No se pudo generar el análisis automático en este momento."
+        analisis_ia_tendencias = "No se pudo generar el análisis de tendencias en este momento."
+
     return render_template(
         "reportes.html",
         stats=stats,
@@ -793,15 +935,353 @@ def reportes():
         datos_categorias=datos_categorias,
         datos_linea_tiempo=datos_linea_tiempo,
         stats_por_categoria=stats_por_categoria,
+        horas_pico=horas_pico,
+        clientes_frecuentes=clientes_frecuentes,
+        tendencia_ventas=tendencia_ventas,
+        platos_mas_vendidos=platos_mas_vendidos,
+        analisis_ia_general=analisis_ia_general,
+        analisis_ia_tendencias=analisis_ia_tendencias,
         appbuilder=appbuilder,
     )
 
 
+@current_app.route("/reporte-general/")
+@login_required
+def reporte_general():
+    roles = {role.name for role in current_user.roles}
+    if "Admin" not in roles:
+        abort(403)
+
+    from sqlalchemy import func
+
+    # --- ESTADÍSTICAS GENERALES (Conteos y Sumatorias) ---
+
+    # Total de reservas (conteo)
+    total_reservas = db.session.query(func.count(Reserva.id_reserva)).scalar() or 0
+
+    # Total de ingresos (sumatoria)
+    total_ingresos = db.session.query(func.sum(Reserva.total_reserva)).scalar() or 0
+
+    # Total de clientes únicos (conteo distinct)
+    total_clientes = (
+        db.session.query(func.count(func.distinct(Reserva.id_usuario))).scalar() or 0
+    )
+
+    # Total de platos vendidos (sumatoria de cantidades)
+    total_platos_vendidos = (
+        db.session.query(func.sum(DetalleReserva.cantidad)).scalar() or 0
+    )
+
+    stats = {
+        "total_reservas": int(total_reservas),
+        "total_ingresos": str(total_ingresos),
+        "total_clientes": int(total_clientes),
+        "total_platos_vendidos": int(total_platos_vendidos),
+    }
+
+    # --- AGRUPACIÓN POR ESTADO (para gráfica de barras) ---
+    resultados_estado = (
+        db.session.query(Reserva.estado, func.count(Reserva.id_reserva))
+        .group_by(Reserva.estado)
+        .all()
+    )
+    datos_estados = [
+        {"estado": estado, "cantidad": cantidad}
+        for estado, cantidad in resultados_estado
+    ]
+
+    # --- AGRUPACIÓN POR CATEGORÍA CON SUMAS (para gráfica de pastel y tabla) ---
+    resultados_categoria = (
+        db.session.query(
+            CategoriaPlato.nombre,
+            func.sum(DetalleReserva.cantidad).label("cantidad_vendida"),
+            func.sum(DetalleReserva.subtotal).label("ingresos_totales"),
+        )
+        .join(Plato, Plato.id_categoria == CategoriaPlato.id_categoria)
+        .join(DetalleReserva, DetalleReserva.id_plato == Plato.id_plato)
+        .group_by(CategoriaPlato.id_categoria, CategoriaPlato.nombre)
+        .order_by(func.sum(DetalleReserva.subtotal).desc())
+        .all()
+    )
+
+    datos_categorias = [
+        {"nombre": nombre, "ingresos": float(ingresos) if ingresos else 0}
+        for nombre, _, ingresos in resultados_categoria
+    ]
+
+    stats_por_categoria = [
+        {
+            "nombre": nombre,
+            "cantidad_vendida": int(cantidad_vendida) if cantidad_vendida else 0,
+            "ingresos_totales": str(ingresos_totales) if ingresos_totales else "0.00",
+            "promedio": str(ingresos_totales / cantidad_vendida)
+            if cantidad_vendida and ingresos_totales
+            else "0.00",
+        }
+        for nombre, cantidad_vendida, ingresos_totales in resultados_categoria
+    ]
+
+    # --- Platos más vendidos (top 5) ---
+    resultados_platos = (
+        db.session.query(
+            Plato.nombre,
+            func.sum(DetalleReserva.cantidad).label('cantidad_vendida')
+        )
+        .join(DetalleReserva, DetalleReserva.id_plato == Plato.id_plato)
+        .group_by(Plato.id_plato, Plato.nombre)
+        .order_by(func.sum(DetalleReserva.cantidad).desc())
+        .limit(5)
+        .all()
+    )
+    
+    platos_mas_vendidos = [
+        {"nombre": nombre, "cantidad": int(cantidad)}
+        for nombre, cantidad in resultados_platos
+    ]
+
+    # --- Tendencia de ventas (comparativa últimos 15 días vs 15 anteriores) ---
+    from datetime import timedelta
+    fecha_corte = datetime.now() - timedelta(days=15)
+    fecha_inicio_anterior = datetime.now() - timedelta(days=30)
+    
+    ventas_ultimos_15 = (
+        db.session.query(func.sum(Reserva.total_reserva))
+        .filter(Reserva.fecha >= fecha_corte)
+        .scalar() or 0
+    )
+    
+    ventas_15_anteriores = (
+        db.session.query(func.sum(Reserva.total_reserva))
+        .filter(Reserva.fecha >= fecha_inicio_anterior, Reserva.fecha < fecha_corte)
+        .scalar() or 0
+    )
+    
+    tendencia_ventas = {
+        "periodo_actual": str(ventas_ultimos_15),
+        "periodo_anterior": str(ventas_15_anteriores),
+        "crecimiento": float(((ventas_ultimos_15 - ventas_15_anteriores) / ventas_15_anteriores * 100) if ventas_15_anteriores > 0 else 0)
+    }
+
+    # --- GENERAR ANÁLISIS CON IA ---
+    contexto_reporte_1 = {
+        "metricas_generales": stats,
+        "reservas_por_estado": datos_estados,
+        "ingresos_por_categoria": datos_categorias,
+        "platos_mas_vendidos": platos_mas_vendidos,
+        "tendencia_ventas": tendencia_ventas
+    }
+    
+    analisis_ia_general = None
+    
+    try:
+        prompt_general = """
+Realiza un ANÁLISIS GENERAL DEL SISTEMA basado en las métricas proporcionadas. Incluye:
+
+1. Resumen ejecutivo del estado actual del negocio
+2. Interpretación de las métricas principales (ventas, reservas, clientes)
+3. Identificación de los productos/servicios más exitosos
+4. Evaluación del rendimiento general
+5. Recomendaciones clave para mejorar el negocio
+
+Sé específico con los datos proporcionados y proporciona insights accionables.
+"""
+        analisis_ia_general = preguntar_ia(prompt_general, contexto_reporte_1)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error generando análisis con IA: {str(e)}")
+        analisis_ia_general = "No se pudo generar el análisis automático en este momento."
+
+    return render_template(
+        "reporte_general.html",
+        stats=stats,
+        datos_estados=datos_estados,
+        datos_categorias=datos_categorias,
+        stats_por_categoria=stats_por_categoria,
+        platos_mas_vendidos=platos_mas_vendidos,
+        tendencia_ventas=tendencia_ventas,
+        analisis_ia_general=analisis_ia_general,
+        appbuilder=appbuilder,
+    )
+
+
+@current_app.route("/reporte-tendencias/")
+@login_required
+def reporte_tendencias():
+    roles = {role.name for role in current_user.roles}
+    if "Admin" not in roles:
+        abort(403)
+
+    from sqlalchemy import func
+    from datetime import timedelta
+
+    # --- Horarios con mayor actividad (por hora del día) ---
+    resultados_horas = (
+        db.session.query(
+            func.extract('hour', Reserva.fecha).label('hora'),
+            func.count(Reserva.id_reserva).label('cantidad')
+        )
+        .group_by(func.extract('hour', Reserva.fecha))
+        .order_by(func.count(Reserva.id_reserva).desc())
+        .limit(5)
+        .all()
+    )
+    
+    horas_pico = [
+        {"hora": int(hora), "cantidad": int(cantidad)}
+        for hora, cantidad in resultados_horas
+    ]
+    
+    # --- Clientes más frecuentes ---
+    resultados_clientes = (
+        db.session.query(
+            AppBuilderUser.username,
+            AppBuilderUser.first_name,
+            AppBuilderUser.last_name,
+            func.count(Reserva.id_reserva).label('total_reservas')
+        )
+        .join(Reserva, Reserva.id_usuario == AppBuilderUser.id)
+        .group_by(AppBuilderUser.id, AppBuilderUser.username, 
+                  AppBuilderUser.first_name, AppBuilderUser.last_name)
+        .order_by(func.count(Reserva.id_reserva).desc())
+        .limit(5)
+        .all()
+    )
+    
+    clientes_frecuentes = [
+        {
+            "username": username,
+            "nombre": f"{first_name or ''} {last_name or ''}".strip() or username,
+            "total_reservas": int(total)
+        }
+        for username, first_name, last_name, total in resultados_clientes
+    ]
+    
+    # --- Tendencia de ventas (comparativa últimos 15 días vs 15 anteriores) ---
+    fecha_corte = datetime.now() - timedelta(days=15)
+    fecha_inicio_anterior = datetime.now() - timedelta(days=30)
+    
+    ventas_ultimos_15 = (
+        db.session.query(func.sum(Reserva.total_reserva))
+        .filter(Reserva.fecha >= fecha_corte)
+        .scalar() or 0
+    )
+    
+    ventas_15_anteriores = (
+        db.session.query(func.sum(Reserva.total_reserva))
+        .filter(Reserva.fecha >= fecha_inicio_anterior, Reserva.fecha < fecha_corte)
+        .scalar() or 0
+    )
+    
+    tendencia_ventas = {
+        "periodo_actual": str(ventas_ultimos_15),
+        "periodo_anterior": str(ventas_15_anteriores),
+        "crecimiento": float(((ventas_ultimos_15 - ventas_15_anteriores) / ventas_15_anteriores * 100) if ventas_15_anteriores > 0 else 0)
+    }
+    
+    # --- Evolución diaria (últimos 30 días) ---
+    fecha_inicio = datetime.now() - timedelta(days=30)
+    
+    resultados_fecha = (
+        db.session.query(
+            func.date(Reserva.fecha).label("fecha"),
+            func.count(Reserva.id_reserva).label("cantidad"),
+        )
+        .filter(Reserva.fecha >= fecha_inicio)
+        .group_by(func.date(Reserva.fecha))
+        .order_by(func.date(Reserva.fecha).asc())
+        .all()
+    )
+
+    datos_linea_tiempo = [
+        {"fecha": fecha.strftime("%Y-%m-%d") if fecha else "", "cantidad": cantidad}
+        for fecha, cantidad in resultados_fecha
+    ]
+    
+    # --- Rendimiento por categoría ---
+    resultados_categoria = (
+        db.session.query(
+            CategoriaPlato.nombre,
+            func.sum(DetalleReserva.cantidad).label("cantidad_vendida"),
+            func.sum(DetalleReserva.subtotal).label("ingresos_totales"),
+        )
+        .join(Plato, Plato.id_categoria == CategoriaPlato.id_categoria)
+        .join(DetalleReserva, DetalleReserva.id_plato == Plato.id_plato)
+        .group_by(CategoriaPlato.id_categoria, CategoriaPlato.nombre)
+        .order_by(func.sum(DetalleReserva.subtotal).desc())
+        .all()
+    )
+
+    stats_por_categoria = [
+        {
+            "nombre": nombre,
+            "cantidad_vendida": int(cantidad_vendida) if cantidad_vendida else 0,
+            "ingresos_totales": str(ingresos_totales) if ingresos_totales else "0.00",
+            "promedio": str(ingresos_totales / cantidad_vendida)
+            if cantidad_vendida and ingresos_totales
+            else "0.00",
+        }
+        for nombre, cantidad_vendida, ingresos_totales in resultados_categoria
+    ]
+
+    # --- GENERAR ANÁLISIS CON IA ---
+    contexto_reporte_2 = {
+        "horas_pico": horas_pico,
+        "clientes_frecuentes": clientes_frecuentes,
+        "tendencia_ventas": tendencia_ventas,
+        "evolucion_diaria": datos_linea_tiempo,
+        "categorias_rendimiento": stats_por_categoria
+    }
+    
+    analisis_ia_tendencias = None
+    
+    try:
+        prompt_tendencias = """
+Realiza un ANÁLISIS DE TENDENCIAS Y COMPORTAMIENTO basado en los datos proporcionados. Incluye:
+
+1. Patrones temporales identificados (horarios pico, días con mayor actividad)
+2. Perfil de clientes más frecuentes y su comportamiento
+3. Tendencia de ventas (crecimiento o disminución)
+4. Servicios/productos con mejor y peor rendimiento
+5. Proyecciones o recomendaciones basadas en las tendencias observadas
+
+Proporciona un análisis detallado que ayude a tomar decisiones estratégicas.
+"""
+        analisis_ia_tendencias = preguntar_ia(prompt_tendencias, contexto_reporte_2)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error generando análisis con IA: {str(e)}")
+        analisis_ia_tendencias = "No se pudo generar el análisis de tendencias en este momento."
+
+    return render_template(
+        "reporte_tendencias.html",
+        horas_pico=horas_pico,
+        clientes_frecuentes=clientes_frecuentes,
+        tendencia_ventas=tendencia_ventas,
+        datos_linea_tiempo=datos_linea_tiempo,
+        stats_por_categoria=stats_por_categoria,
+        analisis_ia_tendencias=analisis_ia_tendencias,
+        appbuilder=appbuilder,
+    )
+
+
+# Menú desplegable para Reportes
+try:
+    appbuilder.add_separator("Administración")
+except Exception:
+    pass 
+    
 appbuilder.add_link(
-    "Reportes",
-    label="Reportes",
-    href="/reportes/",
-    icon="fa-chart-bar",
+    "Reporte General",
+    label="Reporte General",
+    href="/reporte-general/",
+    icon="fa-chart-pie",
     category="Administración",
-    category_icon="fa-cogs",
+)
+
+appbuilder.add_link(
+    "Tendencias y Comportamiento",
+    label="Tendencias y Comportamiento",
+    href="/reporte-tendencias/",
+    icon="fa-line-chart",
+    category="Administración",
 )

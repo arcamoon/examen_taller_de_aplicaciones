@@ -1,0 +1,303 @@
+{% extends "appbuilder/baselayout.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="page-header"><i class="fa fa-line-chart"></i> Reporte 2 - Tendencias y Comportamiento</h1>
+    
+    <!-- Análisis IA Tendencias -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="panel panel-success">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-brain"></i> Interpretación Inteligente mediante IA</h3>
+                </div>
+                <div class="panel-body">
+                    {% if analisis_ia_tendencias %}
+                    <div style="white-space: pre-wrap; line-height: 1.8;">{{ analisis_ia_tendencias }}</div>
+                    {% else %}
+                    <p class="text-muted">Generando análisis de tendencias...</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tendencia de Ventas -->
+    <div class="row">
+        <div class="col-lg-6 col-md-6">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-arrow-up"></i> Tendencia de Ventas</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="row text-center">
+                        <div class="col-xs-6">
+                            <h4>Últimos 15 días</h4>
+                            <p class="text-primary" style="font-size: 24px;">${{ tendencia_ventas.periodo_actual }}</p>
+                        </div>
+                        <div class="col-xs-6">
+                            <h4>15 días anteriores</h4>
+                            <p class="text-muted" style="font-size: 24px;">${{ tendencia_ventas.periodo_anterior }}</p>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="text-center">
+                        {% if tendencia_ventas.crecimiento >= 0 %}
+                        <span class="label label-success" style="font-size: 18px;">
+                            <i class="fa fa-arrow-up"></i> {{ "%.2f"|format(tendencia_ventas.crecimiento) }}% crecimiento
+                        </span>
+                        {% else %}
+                        <span class="label label-danger" style="font-size: 18px;">
+                            <i class="fa fa-arrow-down"></i> {{ "%.2f"|format(tendencia_ventas.crecimiento|abs) }}% disminución
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Platos más vendidos -->
+        <div class="col-lg-6 col-md-6">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-trophy"></i> Productos Más Vendidos</h3>
+                </div>
+                <div class="panel-body">
+                    <table class="table table-condensed">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Producto</th>
+                                <th class="text-right">Cantidad</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for plato in platos_mas_vendidos %}
+                            <tr>
+                                <td><span class="badge badge-primary">{{ loop.index }}</span></td>
+                                <td>{{ plato.nombre }}</td>
+                                <td class="text-right">{{ plato.cantidad }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Horarios pico y Clientes frecuentes -->
+    <div class="row">
+        <!-- Horarios con mayor actividad -->
+        <div class="col-lg-6">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-clock-o"></i> Horarios con Mayor Actividad</h3>
+                </div>
+                <div class="panel-body">
+                    <canvas id="graficaHorasPico"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Clientes frecuentes -->
+        <div class="col-lg-6">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-star"></i> Clientes Frecuentes</h3>
+                </div>
+                <div class="panel-body">
+                    <table class="table table-condensed">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Cliente</th>
+                                <th class="text-right">Reservas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cliente in clientes_frecuentes %}
+                            <tr>
+                                <td><span class="badge badge-info">{{ loop.index }}</span></td>
+                                <td>{{ cliente.nombre }}</td>
+                                <td class="text-right">{{ cliente.total_reservas }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Gráfica de líneas - Evolución temporal -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-line-chart"></i> Evolución de Reservas (Últimos 30 días)</h3>
+                </div>
+                <div class="panel-body">
+                    <canvas id="graficaEvolucion"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Gráfica comparativa de categorías -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-bar-chart"></i> Rendimiento por Categoría (Comparativa)</h3>
+                </div>
+                <div class="panel-body">
+                    <canvas id="graficaComparativaCategorias"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Datos desde el backend
+    const horasPico = {{ horas_pico|tojson }};
+    const clientesFrecuentes = {{ clientes_frecuentes|tojson }};
+    const datosLineaTiempo = {{ datos_linea_tiempo|tojson }};
+    const statsPorCategoria = {{ stats_por_categoria|tojson }};
+    
+    // Gráfica de barras - Horas pico
+    const ctxHorasPico = document.getElementById('graficaHorasPico').getContext('2d');
+    new Chart(ctxHorasPico, {
+        type: 'bar',
+        data: {
+            labels: horasPico.map(d => d.hora + ':00'),
+            datasets: [{
+                label: 'Cantidad de Reservas',
+                data: horasPico.map(d => d.cantidad),
+                backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                borderColor: 'rgba(255, 159, 64, 1)',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+    
+    // Gráfica de líneas - Evolución temporal
+    const ctxEvolucion = document.getElementById('graficaEvolucion').getContext('2d');
+    new Chart(ctxEvolucion, {
+        type: 'line',
+        data: {
+            labels: datosLineaTiempo.map(d => d.fecha),
+            datasets: [{
+                label: 'Cantidad de Reservas',
+                data: datosLineaTiempo.map(d => d.cantidad),
+                borderColor: 'rgba(54, 162, 235, 1)',
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+    
+    // Gráfica comparativa de categorías (doble eje)
+    const ctxComparativa = document.getElementById('graficaComparativaCategorias').getContext('2d');
+    new Chart(ctxComparativa, {
+        type: 'bar',
+        data: {
+            labels: statsPorCategoria.map(d => d.nombre),
+            datasets: [
+                {
+                    label: 'Cantidad Vendida',
+                    data: statsPorCategoria.map(d => d.cantidad_vendida),
+                    backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 2,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Ingresos Totales ($)',
+                    data: statsPorCategoria.map(d => parseFloat(d.ingresos_totales)),
+                    type: 'line',
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Cantidad Vendida'
+                    },
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Ingresos ($)'
+                    },
+                    grid: {
+                        drawOnChartArea: false
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

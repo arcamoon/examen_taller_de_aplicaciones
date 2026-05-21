@@ -1,0 +1,286 @@
+{% extends "appbuilder/baselayout.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="page-header"><i class="fa fa-bar-chart"></i> Reporte 1 - Análisis General del Sistema</h1>
+    
+    <!-- Tarjetas de estadísticas principales -->
+    <div class="row">
+        <div class="col-lg-3 col-md-6">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <div class="row">
+                        <div class="col-xs-3">
+                            <i class="fa fa-calendar fa-5x"></i>
+                        </div>
+                        <div class="col-xs-9 text-right">
+                            <div class="huge">{{ stats.total_reservas }}</div>
+                            <div>Total Reservas</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="panel panel-green">
+                <div class="panel-heading">
+                    <div class="row">
+                        <div class="col-xs-3">
+                            <i class="fa fa-dollar fa-5x"></i>
+                        </div>
+                        <div class="col-xs-9 text-right">
+                            <div class="huge">${{ stats.total_ingresos }}</div>
+                            <div>Ingresos Totales</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="panel panel-yellow">
+                <div class="panel-heading">
+                    <div class="row">
+                        <div class="col-xs-3">
+                            <i class="fa fa-users fa-5x"></i>
+                        </div>
+                        <div class="col-xs-9 text-right">
+                            <div class="huge">{{ stats.total_clientes }}</div>
+                            <div>Clientes Únicos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="panel panel-red">
+                <div class="panel-heading">
+                    <div class="row">
+                        <div class="col-xs-3">
+                            <i class="fa fa-cutlery fa-5x"></i>
+                        </div>
+                        <div class="col-xs-9 text-right">
+                            <div class="huge">{{ stats.total_platos_vendidos }}</div>
+                            <div>Platos Vendidos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Análisis IA General -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-robot"></i> Análisis Automático generado por IA</h3>
+                </div>
+                <div class="panel-body">
+                    {% if analisis_ia_general %}
+                    <div style="white-space: pre-wrap; line-height: 1.8;">{{ analisis_ia_general }}</div>
+                    {% else %}
+                    <p class="text-muted">Generando análisis...</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Gráficas -->
+    <div class="row">
+        <!-- Gráfica de barras - Reservas por estado -->
+        <div class="col-lg-6">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-bar-chart"></i> Reservas por Estado</h3>
+                </div>
+                <div class="panel-body">
+                    <canvas id="graficaEstados"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Gráfica de pastel - Ingresos por categoría -->
+        <div class="col-lg-6">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-pie-chart"></i> Ingresos por Categoría de Plato</h3>
+                </div>
+                <div class="panel-body">
+                    <canvas id="graficaCategorias"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tabla de estadísticas detallada -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-table"></i> Estadísticas Detalladas por Categoría</h3>
+                </div>
+                <div class="panel-body">
+                    <table class="table table-striped table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Categoría</th>
+                                <th>Platos Vendidos (Conteo)</th>
+                                <th>Ingresos Totales (Suma)</th>
+                                <th>Promedio por Plato</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cat in stats_por_categoria %}
+                            <tr>
+                                <td>{{ cat.nombre }}</td>
+                                <td>{{ cat.cantidad_vendida }}</td>
+                                <td>${{ cat.ingresos_totales }}</td>
+                                <td>${{ cat.promedio }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Productos más vendidos -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><i class="fa fa-trophy"></i> Productos Más Vendidos</h3>
+                </div>
+                <div class="panel-body">
+                    <table class="table table-condensed">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Producto</th>
+                                <th class="text-right">Cantidad Vendida</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for plato in platos_mas_vendidos %}
+                            <tr>
+                                <td><span class="badge badge-primary">{{ loop.index }}</span></td>
+                                <td>{{ plato.nombre }}</td>
+                                <td class="text-right">{{ plato.cantidad }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Datos desde el backend
+    const datosEstados = {{ datos_estados|tojson }};
+    const datosCategorias = {{ datos_categorias|tojson }};
+    
+    // Gráfica de barras - Reservas por estado
+    const ctxEstados = document.getElementById('graficaEstados').getContext('2d');
+    new Chart(ctxEstados, {
+        type: 'bar',
+        data: {
+            labels: datosEstados.map(d => d.estado.charAt(0).toUpperCase() + d.estado.slice(1)),
+            datasets: [{
+                label: 'Cantidad de Reservas',
+                data: datosEstados.map(d => d.cantidad),
+                backgroundColor: [
+                    'rgba(54, 162, 235, 0.7)',
+                    'rgba(75, 192, 192, 0.7)',
+                    'rgba(255, 206, 86, 0.7)',
+                    'rgba(153, 102, 255, 0.7)',
+                    'rgba(255, 99, 132, 0.7)'
+                ],
+                borderColor: [
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(255, 206, 86, 1)',
+                    'rgba(153, 102, 255, 1)',
+                    'rgba(255, 99, 132, 1)'
+                ],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+    
+    // Gráfica de pastel - Ingresos por categoría
+    const ctxCategorias = document.getElementById('graficaCategorias').getContext('2d');
+    new Chart(ctxCategorias, {
+        type: 'pie',
+        data: {
+            labels: datosCategorias.map(d => d.nombre),
+            datasets: [{
+                data: datosCategorias.map(d => d.ingresos),
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.7)',
+                    'rgba(54, 162, 235, 0.7)',
+                    'rgba(255, 206, 86, 0.7)',
+                    'rgba(75, 192, 192, 0.7)',
+                    'rgba(153, 102, 255, 0.7)',
+                    'rgba(255, 159, 64, 0.7)'
+                ],
+                borderColor: [
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 206, 86, 1)',
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(153, 102, 255, 1)',
+                    'rgba(255, 159, 64, 1)'
+                ],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            label += '$' + context.parsed.toLocaleString();
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
