@@ -12,7 +12,7 @@ from flask import (
     request,
     url_for,
 )
-from flask_appbuilder import ModelView
+from flask_appbuilder import BaseView, ModelView, expose
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.security.sqla.models import Role, User
 from flask_login import current_user, login_required, login_user
@@ -23,6 +23,7 @@ from wtforms.validators import DataRequired
 from app import appbuilder, db
 from app.crypto import decrypt_id, encrypt_id
 from app.models import CategoriaPlato, DetalleReserva, Plato, Reserva
+from app.services.AiService import preguntar_ia
 
 """
     Create your Model based REST API::
@@ -191,6 +192,26 @@ class ReservaModelView(ModelView):
     }
     edit_form_extra_fields = add_form_extra_fields
 
+
+class AIView(BaseView):
+    route_base = "/ai"
+
+    @expose("/chat", methods=["GET", "POST"])
+    def chat(self):
+        respuesta = None
+        mensaje = ""
+
+        if request.method == "POST":
+            mensaje = request.form.get("message")
+            if mensaje:
+                respuesta = preguntar_ia(mensaje)
+
+        return self.render_template(
+            "ai_chat.html", respuesta=respuesta, mensaje=mensaje
+        )
+
+
+appbuilder.add_view_no_menu(AIView, "IA Chat")
 
 appbuilder.add_view(
     CategoriaPlatoModelView,
@@ -667,36 +688,41 @@ def page_not_found(e):
         404,
     )
 
+
 @current_app.route("/reportes/")
 @login_required
 def reportes():
     roles = {role.name for role in current_user.roles}
     if "Admin" not in roles:
         abort(403)
-    
+
     from sqlalchemy import func
-    
+
     # --- ESTADÍSTICAS GENERALES (Conteos y Sumatorias) ---
-    
+
     # Total de reservas (conteo)
     total_reservas = db.session.query(func.count(Reserva.id_reserva)).scalar() or 0
-    
+
     # Total de ingresos (sumatoria)
     total_ingresos = db.session.query(func.sum(Reserva.total_reserva)).scalar() or 0
-    
+
     # Total de clientes únicos (conteo distinct)
-    total_clientes = db.session.query(func.count(func.distinct(Reserva.id_usuario))).scalar() or 0
-    
+    total_clientes = (
+        db.session.query(func.count(func.distinct(Reserva.id_usuario))).scalar() or 0
+    )
+
     # Total de platos vendidos (sumatoria de cantidades)
-    total_platos_vendidos = db.session.query(func.sum(DetalleReserva.cantidad)).scalar() or 0
-    
+    total_platos_vendidos = (
+        db.session.query(func.sum(DetalleReserva.cantidad)).scalar() or 0
+    )
+
     stats = {
         "total_reservas": int(total_reservas),
         "total_ingresos": str(total_ingresos),
         "total_clientes": int(total_clientes),
         "total_platos_vendidos": int(total_platos_vendidos),
     }
-    
+
     # --- AGRUPACIÓN POR ESTADO (para gráfica de barras) ---
     resultados_estado = (
         db.session.query(Reserva.estado, func.count(Reserva.id_reserva))
@@ -707,7 +733,7 @@ def reportes():
         {"estado": estado, "cantidad": cantidad}
         for estado, cantidad in resultados_estado
     ]
-    
+
     # --- AGRUPACIÓN POR CATEGORÍA CON SUMAS (para gráfica de pastel y tabla) ---
     resultados_categoria = (
         db.session.query(
@@ -721,27 +747,29 @@ def reportes():
         .order_by(func.sum(DetalleReserva.subtotal).desc())
         .all()
     )
-    
+
     datos_categorias = [
         {"nombre": nombre, "ingresos": float(ingresos) if ingresos else 0}
         for nombre, _, ingresos in resultados_categoria
     ]
-    
+
     stats_por_categoria = [
         {
             "nombre": nombre,
             "cantidad_vendida": int(cantidad_vendida) if cantidad_vendida else 0,
             "ingresos_totales": str(ingresos_totales) if ingresos_totales else "0.00",
-            "promedio": str(ingresos_totales / cantidad_vendida) if cantidad_vendida and ingresos_totales else "0.00",
+            "promedio": str(ingresos_totales / cantidad_vendida)
+            if cantidad_vendida and ingresos_totales
+            else "0.00",
         }
         for nombre, cantidad_vendida, ingresos_totales in resultados_categoria
     ]
-    
+
     # --- AGRUPACIÓN POR FECHA (últimos 30 días) - Para gráfica de líneas ---
     from datetime import timedelta
-    
+
     fecha_inicio = datetime.now() - timedelta(days=30)
-    
+
     resultados_fecha = (
         db.session.query(
             func.date(Reserva.fecha).label("fecha"),
@@ -752,12 +780,12 @@ def reportes():
         .order_by(func.date(Reserva.fecha).asc())
         .all()
     )
-    
+
     datos_linea_tiempo = [
         {"fecha": fecha.strftime("%Y-%m-%d") if fecha else "", "cantidad": cantidad}
         for fecha, cantidad in resultados_fecha
     ]
-    
+
     return render_template(
         "reportes.html",
         stats=stats,
@@ -767,6 +795,7 @@ def reportes():
         stats_por_categoria=stats_por_categoria,
         appbuilder=appbuilder,
     )
+
 
 appbuilder.add_link(
     "Reportes",
